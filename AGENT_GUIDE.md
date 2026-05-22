@@ -1,165 +1,133 @@
 # Hermes — Weather Trading Agent (TypeScript Edition)
 
-A production-grade Polymarket weather trading agent running 24/7, built in TypeScript with
-self-calibrating forecasts across 40+ cities and 3 weather sources feeding into Expected Value
-and Kelly Criterion position sizing.
+A production-grade Polymarket weather trading agent running 24/7 in Docker, built in TypeScript
+with self-calibrating forecasts across 40+ cities and 3 weather sources feeding into Expected
+Value and Kelly Criterion position sizing. Uses your existing Polymarket balance directly —
+no separate wallet needed.
 
 This is a copy-paste guide for your Hermes agent. No manual coding required.
-**Total setup time: ~20 minutes.**
+**Total setup time: ~15 minutes.**
 
 ---
 
-## PROMPT 1 — Install dependencies and build
-
-The bot is already cloned. Tell your agent:
+## PROMPT 1 — Clone and set up the environment
 
 ```
-cd D:\weather-bot and run: npm install
-then build it: npx tsc
-confirm the dist/ folder exists and contains index.js
-```
+pull the bot from GitHub and set it up in Docker:
 
----
+git clone https://github.com/pumpykyt/weather-bot.git
+cd weather-bot
 
-## PROMPT 2 — Create a Polymarket wallet
+copy config.example.json to config.json:
+cp config.example.json config.json
 
-Set up a dedicated wallet for the bot. Ask Hermes:
-
-```
-create a new Ethereum/Polygon wallet for me using ethers.js or viem in Node.js.
-show me the address and private key.
-save them to D:\weather-bot\.env as:
-
-POLYMARKET_PK=the_private_key
-POLYMARKET_ADDRESS=the_wallet_address
-```
-
-Save the address and private key it gives you.
-
----
-
-## PROMPT 3 — Fund the wallet (you do this yourself)
-
-Send to the wallet address on **Polygon** network:
-- **USDC** — your trading capital ($10 min, $50 recommended)
-- **POL** — ~2 POL for gas (~$0.50)
-
-Once funded, tell your agent:
-
-```
-check the balance of my Polygon wallet. address is 0xYOUR_ADDRESS.
-check both POL and USDC (contract: 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359)
+create a .env file with this content:
+HERMES_BASE_URL=http://host.docker.internal:11434
+HERMES_MODEL=hermes3
 ```
 
 ---
 
-## PROMPT 4 — Approve Polymarket contracts
+## PROMPT 2 — Configure the bot
+
+Get your Polymarket API key: polymarket.com → Settings → API Keys → Create Key.
+Get your Visual Crossing key: visualcrossing.com → free account → copy API key.
 
 ```
-i need to approve USDC spending for Polymarket on Polygon.
-my wallet private key is in D:\weather-bot\.env as POLYMARKET_PK.
-
-send ERC20 approve (max uint256) for USDC (0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359)
-to these 3 contracts:
-
-1. CTF Exchange:    0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
-2. Neg Risk Exchange: 0xC5d563A36AE78145C45a50134d48A1215220f80a
-3. Router:          0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296
-
-also call setApprovalForAll on the Conditional Tokens contract
-(0x4D97DCd97eC945f40cF65F87097ACe5EA0476045) for the same 3 spenders.
-
-use ethers.js, EIP-1559, chain id 137, wait for each receipt.
-set HERMES_BASE_URL and HERMES_MODEL in the .env if not already set.
-```
-
----
-
-## PROMPT 5 — Configure the bot
-
-Visual Crossing is already wired in. Just set your capital and flip to live mode:
-
-```
-edit D:\weather-bot\config.json and set:
-- balance: match my actual USDC balance (e.g. 100)
-- maxBet: 2.0    (dollars per trade, start small)
-- minEv: 0.10    (only trade when edge is 10%+)
-- paperTrading: false
+edit weather-bot/config.json and set these values:
+- balance: your current Polymarket USDC balance (e.g. 200)
+- maxBet: 2.0
+- minEv: 0.10
+- paperTrading: true
 - polymarketApiKey: YOUR_POLYMARKET_API_KEY
+- vcKey: YOUR_VISUAL_CROSSING_KEY
 
-leave everything else default
+leave everything else at its default
 ```
 
-To get your Polymarket API key: go to polymarket.com → Settings → API Keys → Create Key.
-
-> **Start with `paperTrading: true` first** — run a few scan cycles and check the output
-> before switching to live. The paper mode is identical except no real orders are sent.
+> Keep `paperTrading: true` for now — we test first before going live.
 
 ---
 
-## PROMPT 6 — Run a test scan
+## PROMPT 3 — Write a Dockerfile and build
 
 ```
-cd D:\weather-bot and run: node dist/index.js --scan
-show me every trade signal it found and what it would have bought
+create a Dockerfile in the weather-bot folder:
+
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npx tsc
+CMD ["node", "dist/index.js"]
+
+then build the image:
+docker build -t weather-bot .
+```
+
+---
+
+## PROMPT 4 — Run a paper trading scan
+
+```
+run a one-shot scan in paper mode to confirm everything works:
+
+docker run --rm \
+  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/data:/app/data \
+  --env-file .env \
+  weather-bot node dist/index.js --scan
+
+show me every signal it found
 ```
 
 You'll see output like:
 
 ```
 [polymarket] Fetched 55 temperature events
-[bot] OPENED New York City 2026-05-23 | EV=0.434 P=42.1% $2.00 @ 0.320
+[bot] OPENED New York City 2026-05-23 | EV=0.43 P=42.1% $2.00 @ 0.320
 [bot] OPENED London 2026-05-23 | EV=0.21 P=55.3% $1.80 @ 0.620
 [bot] OPENED Tokyo 2026-05-23 | EV=0.15 P=38.7% $1.20 @ 0.440
 ```
 
 ---
 
-## PROMPT 7 — Start continuous trading
+## PROMPT 5 — Start continuous trading
 
-Once you're happy with the paper results:
+Once you're satisfied with the paper results, flip to live and start the bot:
 
 ```
-set paperTrading to false in D:\weather-bot\config.json
-then start the bot as a background process:
+set paperTrading to false in config.json
 
-node dist/index.js
+then start the bot as a persistent Docker container:
 
-it will:
-- run a full scan every 60 minutes across 40+ cities
-- check open positions every 10 minutes for stop-loss and take-profit
-- self-calibrate forecast accuracy using Visual Crossing after each resolved market
-- log every trade to data/state.json and data/markets/
+docker run -d \
+  --name weather-bot \
+  --restart unless-stopped \
+  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/data:/app/data \
+  --env-file .env \
+  weather-bot
 
-show me the current open positions and balance after the first scan
+confirm it is running:
+docker logs weather-bot --tail 50
 ```
+
+The bot will:
+- Scan all 40+ cities every 60 minutes
+- Check open positions every 10 minutes (stop-loss / take-profit)
+- Auto-calibrate forecast accuracy after each resolved market
 
 ---
 
-## PROMPT 8 — Add Telegram alerts (optional)
+## PROMPT 6 — Check stats anytime
 
 ```
-add Telegram trade alerts to D:\weather-bot\src\bot.ts.
-use the node-telegram-bot-api package.
-read TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from the .env file.
-
-send a message on:
-- every new position opened (city, date, EV, bet size, entry price)
-- every position closed (city, P&L, exit reason)
-- stats summary every 6 hours (balance, W/L, open count)
-
-keep it silent if the env vars are not set
+docker exec weather-bot node dist/index.js --stats
 ```
 
----
-
-## PROMPT 9 — Check stats anytime
-
-```
-cd D:\weather-bot and run: node dist/index.js --stats
-```
-
-You'll see:
+Output:
 
 ```
 === WeatherBot Stats ===
@@ -172,19 +140,66 @@ Open:          7
 
 ---
 
+## PROMPT 7 — Pull updates from GitHub
+
+When the bot gets updated:
+
+```
+docker stop weather-bot && docker rm weather-bot
+git pull https://github.com/pumpykyt/weather-bot.git
+docker build -t weather-bot .
+docker run -d \
+  --name weather-bot \
+  --restart unless-stopped \
+  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/data:/app/data \
+  --env-file .env \
+  weather-bot
+```
+
+Your `config.json` and `data/` folder are mounted as volumes so they survive container rebuilds.
+
+---
+
+## PROMPT 8 — Add Telegram alerts (optional)
+
+```
+add Telegram trade alerts to weather-bot/src/bot.ts.
+install node-telegram-bot-api and its types.
+read TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from process.env.
+
+send a message on:
+- every new position opened: city, date, EV, bet size, entry price
+- every position closed: city, P&L, exit reason
+- hourly stats: balance, W/L, open positions count
+
+do nothing if the env vars are not set.
+rebuild the Docker image after.
+```
+
+Add to `.env`:
+```
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+---
+
+## PROMPT 9 — Read calibration data
+
+```
+docker exec weather-bot cat data/calibration.json | show me which cities
+have the tightest sigma (most accurate forecasts) and which have the most error
+```
+
+---
+
 ## How the bot improves itself
 
-After each resolved market the bot fetches the actual temperature from **Visual Crossing**,
+After each resolved market the bot fetches the actual temperature from Visual Crossing,
 compares it to the forecast it traded on, and updates `data/calibration.json`.
-Once 30+ samples accumulate for a city/source pair, sigma auto-tightens — making
-probability estimates more accurate for that city over time.
-
-You can ask Hermes to inspect calibration at any time:
-
-```
-read D:\weather-bot\data\calibration.json and tell me which cities
-have the most accurate forecasts and which have the most error
-```
+Once 30+ samples accumulate per city/source pair, sigma auto-tightens — probability
+estimates improve over time without any manual intervention.
 
 ---
 
@@ -192,11 +207,12 @@ have the most accurate forecasts and which have the most error
 
 | File | Purpose |
 |---|---|
-| `config.json` | All trading parameters |
+| `config.json` | All trading parameters (mounted as volume, not in image) |
+| `config.example.json` | Safe template to copy from |
 | `data/state.json` | Live balance, W/L, open positions |
 | `data/markets/` | Per-trade JSON files |
 | `data/calibration.json` | Per-city forecast accuracy |
-| `src/` | Full TypeScript source (editable) |
+| `src/` | Full TypeScript source |
 
 ---
 
@@ -210,4 +226,4 @@ have the most accurate forecasts and which have the most error
 | `maxPrice` | 0.40 | 0.50 |
 | `minVolume` | 1000 | 200 |
 
-Start conservative. Let the calibration loop run for 2–3 weeks before tuning.
+Start conservative. Let calibration run for 2–3 weeks before tuning.
