@@ -36,7 +36,7 @@ Visual Crossing key is already set in the repo — skip that step.
 ```
 edit weather-bot/config.json and set:
 - balance: your current Polymarket USDC balance (e.g. 200)
-- maxBet: 2.0
+- maxBet: 1.0
 - minEv: 0.10
 - paperTrading: true
 - polymarketApiKey: YOUR_POLYMARKET_API_KEY
@@ -191,7 +191,7 @@ estimates improve over time without any manual intervention.
 
 | Parameter | Conservative | Aggressive |
 |---|---|---|
-| `maxBet` | $2 | $20 |
+| `maxBet` | $1 | $20 |
 | `minEv` | 0.15 | 0.05 |
 | `kellyFraction` | 0.15 | 0.35 |
 | `maxPrice` | 0.40 | 0.50 |
