@@ -1,0 +1,16 @@
+{
+  "balance": 10000.0,
+  "maxBet": 20.0,
+  "minEv": 0.1,
+  "maxPrice": 0.45,
+  "minVolume": 500,
+  "minHours": 2.0,
+  "maxHours": 72.0,
+  "kellyFraction": 0.25,
+  "scanInterval": 3600,
+  "calibrationMin": 30,
+  "maxSlippage": 0.03,
+  "vcKey": "YOUR_VISUAL_CROSSING_KEY",
+  "polymarketApiKey": "YOUR_POLYMARKET_API_KEY",
+  "paperTrading": true
+}
