@@ -1,7 +1,0 @@
-node_modules
-dist
-.env
-config.json
-data
-*.js.map
-.git
